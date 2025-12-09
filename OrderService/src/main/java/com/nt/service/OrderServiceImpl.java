@@ -2,6 +2,8 @@ package com.nt.service;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.stream.Collectors;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeanUtils;
@@ -19,7 +21,6 @@ import com.nt.dto.PaymentResponseDTO;
 import com.nt.dto.ProductDto;
 import com.nt.dto.UserDTO;
 import com.nt.enitity.Order;
-import com.nt.enitity.Order.OrderStatus;
 import com.nt.enitity.OrderItem;
 import com.nt.payload.ApiResponse;
 import com.nt.repository.OrderRepository;
@@ -114,6 +115,7 @@ public class OrderServiceImpl implements IOrderService{
         return orderResponse;
     }
     
+	
     public OrderResponseDTO createOrderFallback(OrderRequestDTO orderRequest, Exception ex) {
         log.error("Fallback method called for createOrder", ex);
         throw new RuntimeException("Service temporarily unavailable. Please try again later.");
@@ -121,32 +123,56 @@ public class OrderServiceImpl implements IOrderService{
 
 	@Override
 	public OrderResponseDTO getOrderById(Long id) throws Exception {
-		// TODO Auto-generated method stub
-		return null;
+		log.info("get Order By Id");
+		Order order=repo.findById(id).orElseThrow(()-> new RuntimeException("Order Not Found"));
+		OrderResponseDTO orderResponse=new OrderResponseDTO();
+		BeanUtils.copyProperties(order, orderResponse);
+		return orderResponse;
 	}
 
 	@Override
 	public List<OrderResponseDTO> getAllOrders() throws Exception {
-		// TODO Auto-generated method stub
-		return null;
+		log.info("Get All Orders:: ");
+		return repo.findAll().stream().map(this::convertToDTO).collect(Collectors.toList());
 	}
 
 	@Override
 	public List<OrderResponseDTO> getOrdersByUserId(Long userId) throws Exception {
-		// TODO Auto-generated method stub
-		return null;
+		log.info("OrderServiceImpl.getOrdersByUserId()");
+		return repo.findByUserId(userId).stream().map(this::convertToDTO).collect(Collectors.toList());
 	}
 
 	@Override
-	public OrderResponseDTO updateOrderStatus(Long id, OrderStatus status) throws Exception {
-		// TODO Auto-generated method stub
-		return null;
+	public OrderResponseDTO updateOrderStatus(Long id, Order.OrderStatus status) throws Exception {
+		log.info("OrderServiceImpl.updateOrderStatus()");
+		Order order=repo.findById(id).orElseThrow(()-> new RuntimeException("Order Not Found:: "+id));
+		order.setStatus(status);
+		order.setUpdatedDate(LocalDateTime.now());
+		Order newOrder=repo.save(order);
+		log.info("Order {} status updated to {}", id, status);
+		return convertToDTO(newOrder);
 	}
 
 	@Override
 	public void cancelOrder(Long id) throws Exception {
-		// TODO Auto-generated method stub
+		log.info("OrderServiceImpl.cancelOrder()");
+		Order order=repo.findById(id).orElseThrow(()-> new RuntimeException("Order Not Found "+id));
+		if(order.getStatus()==Order.OrderStatus.DELIVERED || order.getStatus().equals(Order.OrderStatus.DELIVERED)) {
+			log.info("Can Not Cancel Delevered Order");
+			throw new RuntimeException("Can Not Cancel Delevered Order");
+		}
 		
+		order.setStatus(Order.OrderStatus.CANCELLED);
+		order.setUpdatedDate(LocalDateTime.now());
+		repo.save(order);
+		log.info("Order {} cancelled", id);
+	}
+	
+	
+	private OrderResponseDTO convertToDTO(Order order) {
+	    OrderResponseDTO dto = new OrderResponseDTO();
+	    BeanUtils.copyProperties(order, dto);
+	    return dto;
 	}
 
 }
